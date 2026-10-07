@@ -9,6 +9,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/issues")
 @RequiredArgsConstructor
@@ -19,5 +21,15 @@ public class IssueController {
     @PostMapping
     public ResponseEntity<IssueResponse> issueBook(@Valid @RequestBody IssueRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(issueService.issueBook(request));
+    }
+
+    @PutMapping("/{id}/return")
+    public IssueResponse returnBook(@PathVariable Long id) {
+        return issueService.returnBook(id);
+    }
+
+    @GetMapping("/user/{userId}")
+    public List<IssueResponse> getIssuesByUser(@PathVariable Long userId) {
+        return issueService.getIssuesByUser(userId);
     }
 }

@@ -12,13 +12,17 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
 public class IssueService {
 
     private static final int LOAN_DAYS = 14;
+    private static final BigDecimal FINE_PER_DAY = new BigDecimal("5.00");
 
     private final IssueRecordRepository issueRecordRepository;
     private final BookRepository bookRepository;
@@ -59,5 +63,39 @@ public class IssueService {
                 .build();
 
         return IssueResponse.from(issueRecordRepository.save(record));
+    }
+
+    @Transactional
+    public IssueResponse returnBook(Long issueId) {
+        IssueRecord record = issueRecordRepository.findById(issueId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Issue record not found with id " + issueId));
+
+        if (record.getStatus() == IssueStatus.RETURNED) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "This book has already been returned");
+        }
+
+        Book book = bookRepository.findByIdForUpdate(record.getBook().getId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Book not found"));
+
+        LocalDate today = LocalDate.now();
+        long overdueDays = ChronoUnit.DAYS.between(record.getDueDate(), today);
+        BigDecimal fine = overdueDays > 0
+                ? FINE_PER_DAY.multiply(BigDecimal.valueOf(overdueDays))
+                : BigDecimal.ZERO;
+
+        record.setReturnDate(today);
+        record.setFineAmount(fine);
+        record.setStatus(IssueStatus.RETURNED);
+        book.setAvailableCopies(book.getAvailableCopies() + 1);
+
+        return IssueResponse.from(issueRecordRepository.save(record));
+    }
+
+    @Transactional(readOnly = true)
+    public List<IssueResponse> getIssuesByUser(Long userId) {
+        return issueRecordRepository.findByUserId(userId).stream()
+                .map(IssueResponse::from)
+                .toList();
     }
 }
