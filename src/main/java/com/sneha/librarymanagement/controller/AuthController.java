@@ -1,5 +1,7 @@
 package com.sneha.librarymanagement.controller;
 
+import com.sneha.librarymanagement.dto.AuthResponse;
+import com.sneha.librarymanagement.dto.LoginRequest;
 import com.sneha.librarymanagement.dto.RegisterRequest;
 import com.sneha.librarymanagement.dto.UserResponse;
 import com.sneha.librarymanagement.service.AuthService;
@@ -19,5 +21,10 @@ public class AuthController {
     @PostMapping("/register")
     public ResponseEntity<UserResponse> register(@Valid @RequestBody RegisterRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(authService.register(request));
+    }
+
+    @PostMapping("/login")
+    public AuthResponse login(@Valid @RequestBody LoginRequest request) {
+        return authService.login(request);
     }
 }
