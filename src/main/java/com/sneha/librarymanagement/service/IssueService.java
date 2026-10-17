@@ -29,14 +29,32 @@ public class IssueService {
     private final UserRepository userRepository;
 
     @Transactional
-    public IssueResponse issueBook(IssueRequest request) {
+    public IssueResponse issueBook(IssueRequest request, String callerEmail) {
+        User caller = currentUser(callerEmail);
+
+        // Who is the book being issued to?
+        Long targetUserId;
+        if (caller.getRole() == Role.MEMBER) {
+            if (request.userId() != null && !request.userId().equals(caller.getId())) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                        "Members can only issue books for themselves");
+            }
+            targetUserId = caller.getId();
+        } else {
+            if (request.userId() == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "userId is required when issuing a book on behalf of a member");
+            }
+            targetUserId = request.userId();
+        }
+
         Book book = bookRepository.findByIdForUpdate(request.bookId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "Book not found with id " + request.bookId()));
 
-        User user = userRepository.findById(request.userId())
+        User user = userRepository.findById(targetUserId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                        "User not found with id " + request.userId()));
+                        "User not found with id " + targetUserId));
 
         if (!user.isActive()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "User account is inactive");
@@ -93,9 +111,27 @@ public class IssueService {
     }
 
     @Transactional(readOnly = true)
-    public List<IssueResponse> getIssuesByUser(Long userId) {
+    public List<IssueResponse> getIssuesByUser(Long userId, String callerEmail) {
+        User caller = currentUser(callerEmail);
+        if (caller.getRole() == Role.MEMBER && !caller.getId().equals(userId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Members can only view their own issues");
+        }
         return issueRecordRepository.findByUserId(userId).stream()
                 .map(IssueResponse::from)
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<IssueResponse> getMyIssues(String callerEmail) {
+        User caller = currentUser(callerEmail);
+        return issueRecordRepository.findByUserId(caller.getId()).stream()
+                .map(IssueResponse::from)
+                .toList();
+    }
+
+    private User currentUser(String email) {
+        return userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not found"));
     }
 }
