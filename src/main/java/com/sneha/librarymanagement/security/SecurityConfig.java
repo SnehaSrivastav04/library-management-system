@@ -50,6 +50,9 @@ public class SecurityConfig {
                         // issues: only staff can mark a book as returned
                         .requestMatchers(HttpMethod.PUT, "/api/issues/*/return").hasAnyRole("ADMIN", "LIBRARIAN")
 
+                        // admin tools (e.g. trigger reminder emails manually)
+                        .requestMatchers("/api/admin/**").hasRole("ADMIN")
+
                         // everything else just needs a valid login
                         .anyRequest().authenticated())
                 .exceptionHandling(ex -> ex
