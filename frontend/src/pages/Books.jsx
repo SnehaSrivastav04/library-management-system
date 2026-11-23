@@ -1,27 +1,35 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import api from "../api";
+import api, { errorMessage } from "../api";
+import BookForm from "../components/BookForm";
 
 export default function Books() {
   const navigate = useNavigate();
   const user = JSON.parse(localStorage.getItem("user") || "null");
+  const role = user?.role;
+  const isStaff = role === "ADMIN" || role === "LIBRARIAN";
+  const isAdmin = role === "ADMIN";
+  const isMember = role === "MEMBER";
 
   const [books, setBooks] = useState([]);
   const [keyword, setKeyword] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [saving, setSaving] = useState(false);
 
   const loadBooks = async (kw = "") => {
     setLoading(true);
-    setError("");
     try {
       const search = kw.trim();
       const { data } = search
         ? await api.get("/books/search", { params: { keyword: search } })
         : await api.get("/books");
       setBooks(data);
-    } catch {
-      setError("Could not load books.");
+    } catch (err) {
+      setError(errorMessage(err, "Could not load books."));
     } finally {
       setLoading(false);
     }
@@ -31,8 +39,14 @@ export default function Books() {
     loadBooks();
   }, []);
 
+  const clearMessages = () => {
+    setError("");
+    setSuccess("");
+  };
+
   const handleSearch = (e) => {
     e.preventDefault();
+    clearMessages();
     loadBooks(keyword);
   };
 
@@ -42,13 +56,77 @@ export default function Books() {
     navigate("/login");
   };
 
+  // MEMBER: borrow a book for themselves
+  const handleIssue = async (book) => {
+    clearMessages();
+    try {
+      const { data } = await api.post("/issues", { bookId: book.id });
+      const due = data?.dueDate ? ` Due date: ${data.dueDate}.` : "";
+      setSuccess(`Issued "${book.title}".${due}`);
+      loadBooks(keyword);
+    } catch (err) {
+      setError(errorMessage(err));
+    }
+  };
+
+  // LIBRARIAN / ADMIN: add or edit a book
+  const handleSave = async (values) => {
+    clearMessages();
+    setSaving(true);
+    try {
+      if (editing) {
+        await api.put(`/books/${editing.id}`, values);
+        setSuccess("Book updated.");
+      } else {
+        await api.post("/books", values);
+        setSuccess("Book added.");
+      }
+      closeForm();
+      loadBooks(keyword);
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ADMIN only: delete a book
+  const handleDelete = async (book) => {
+    if (!window.confirm(`Delete "${book.title}"?`)) return;
+    clearMessages();
+    try {
+      await api.delete(`/books/${book.id}`);
+      setSuccess("Book deleted.");
+      loadBooks(keyword);
+    } catch (err) {
+      setError(errorMessage(err));
+    }
+  };
+
+  const openAdd = () => {
+    clearMessages();
+    setEditing(null);
+    setShowForm(true);
+  };
+
+  const openEdit = (book) => {
+    clearMessages();
+    setEditing(book);
+    setShowForm(true);
+  };
+
+  const closeForm = () => {
+    setShowForm(false);
+    setEditing(null);
+  };
+
   return (
     <div className="page">
       <header className="topbar">
         <h1>Library Books</h1>
         <div className="user-box">
           <span>
-            {user?.name} ({user?.role})
+            {user?.name} ({role})
           </span>
           <button onClick={handleLogout}>Logout</button>
         </div>
@@ -65,17 +143,44 @@ export default function Books() {
           type="button"
           onClick={() => {
             setKeyword("");
+            clearMessages();
             loadBooks("");
           }}
         >
           Clear
         </button>
+        {isStaff && (
+          <button type="button" className="success" onClick={openAdd}>
+            + Add Book
+          </button>
+        )}
       </form>
 
+      {showForm && (
+        <BookForm
+          key={editing?.id ?? "new"}
+          initial={
+            editing
+              ? {
+                  title: editing.title,
+                  author: editing.author,
+                  isbn: editing.isbn,
+                  category: editing.category,
+                  totalCopies: editing.totalCopies,
+                }
+              : undefined
+          }
+          saving={saving}
+          onSubmit={handleSave}
+          onCancel={closeForm}
+        />
+      )}
+
       {error && <p className="error">{error}</p>}
+      {success && <p className="ok">{success}</p>}
       {loading && <p>Loading...</p>}
 
-      {!loading && !error && books.length === 0 && <p>No books found.</p>}
+      {!loading && books.length === 0 && <p>No books found.</p>}
 
       {!loading && books.length > 0 && (
         <table>
@@ -87,6 +192,7 @@ export default function Books() {
               <th>ISBN</th>
               <th>Category</th>
               <th>Available</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -99,6 +205,28 @@ export default function Books() {
                 <td>{b.category}</td>
                 <td>
                   {b.availableCopies} / {b.totalCopies}
+                </td>
+                <td>
+                  <div className="actions">
+                    {isMember && (
+                      <button
+                        disabled={b.availableCopies <= 0}
+                        onClick={() => handleIssue(b)}
+                      >
+                        Issue
+                      </button>
+                    )}
+                    {isStaff && (
+                      <button className="secondary" onClick={() => openEdit(b)}>
+                        Edit
+                      </button>
+                    )}
+                    {isAdmin && (
+                      <button className="danger" onClick={() => handleDelete(b)}>
+                        Delete
+                      </button>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}

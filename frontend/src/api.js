@@ -24,4 +24,14 @@ api.interceptors.response.use(
   }
 );
 
+// Turns a backend error into a readable message for the screen
+export function errorMessage(err, fallback = "Something went wrong") {
+  if (!err.response) return "Cannot reach the server. Is the backend running?";
+  if (err.response.status === 403) return "You do not have permission to do this.";
+  const data = err.response.data;
+  if (data?.fieldErrors) return Object.values(data.fieldErrors).join(", ");
+  if (data?.message) return data.message;
+  return fallback;
+}
+
 export default api;
