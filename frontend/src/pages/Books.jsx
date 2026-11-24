@@ -1,10 +1,9 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import api, { errorMessage } from "../api";
 import BookForm from "../components/BookForm";
+import Navbar from "../components/Navbar";
 
 export default function Books() {
-  const navigate = useNavigate();
   const user = JSON.parse(localStorage.getItem("user") || "null");
   const role = user?.role;
   const isStaff = role === "ADMIN" || role === "LIBRARIAN";
@@ -48,12 +47,6 @@ export default function Books() {
     e.preventDefault();
     clearMessages();
     loadBooks(keyword);
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
-    navigate("/login");
   };
 
   // MEMBER: borrow a book for themselves
@@ -122,15 +115,8 @@ export default function Books() {
 
   return (
     <div className="page">
-      <header className="topbar">
-        <h1>Library Books</h1>
-        <div className="user-box">
-          <span>
-            {user?.name} ({role})
-          </span>
-          <button onClick={handleLogout}>Logout</button>
-        </div>
-      </header>
+      <Navbar />
+      <h2 className="page-title">Books</h2>
 
       <form className="search" onSubmit={handleSearch}>
         <input
